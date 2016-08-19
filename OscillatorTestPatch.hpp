@@ -60,7 +60,10 @@ public:
     if (parameterB < 0.05){
       lfoValue = 1;
     } else {
-      lfo.setPeriod(1 - (parameterB * 0.9 + 0.1));
+      lfo.setPeriod(1 - (parameterB * 0.9 + 0.1) + 0.001);
+	  //
+	 // lfo.setFrequency(parameterB*10);
+
       lfoValue = lfo.getNextSample();
     }
     // smooth the LFO value
