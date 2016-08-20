@@ -20,7 +20,7 @@ public:
     registerParameter(PARAMETER_D, "FM width");
     table = FloatArray::create(512);
     for(unsigned int n = 0; n < table.getSize(); ++n){
-      table[n] = sin(2 * M_PI * n / getSampleRate());
+      table[n] = sin(2 * M_PI * n / table.getSize());
     }
     osc.setTable(table);
     lfo.setTable(table);
@@ -44,7 +44,7 @@ public:
     if (parameterB < 0.05){
       lfoValue = 1;
     } else {
-      lfo.setPeriod(1 - (parameterB * 0.9 + 0.1) + 0.001);
+      lfo.setFrequency(parameterB * 30);
       lfoValue = lfo.getNextSample();
     }
     // smooth the LFO value
