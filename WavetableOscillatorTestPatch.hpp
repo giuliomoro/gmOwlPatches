@@ -3,28 +3,39 @@
 
 #include "Patch.h"
 #include "WavetableOscillator.h"
+#include "SineOscillator.hpp"
 
 class WavetableOscillatorTestPatch : public Patch {
 public:
-  WavetableOscillator osc;
-  WavetableOscillator lfo;
-  WavetableOscillator fm;
+  WavetableOscillator oscNo;
+  SmoothWavetableOscillator oscLin;
+  SmoothWavetableOscillator4 osc4;
+  SmoothWavetableOscillator4 lfo;
+  SmoothWavetableOscillator4 fm;
   FloatArray table;
-  WavetableOscillatorTestPatch() : 
-    // a bit of a waste to construct these with an unallocated FloatArray
-    osc(table), lfo(getBlockSize(),table), fm(table)
+  FloatArray fc;
+  WavetableOscillatorTestPatch()
   {
     registerParameter(PARAMETER_A, "Frequency");
     registerParameter(PARAMETER_B, "LFO rate");
     registerParameter(PARAMETER_C, "FM freq");
-    registerParameter(PARAMETER_D, "FM width");
-    table = FloatArray::create(512);
-    for(unsigned int n = 0; n < table.getSize(); ++n){
-      table[n] = sin(2 * M_PI * n / table.getSize());
+    registerParameter(PARAMETER_D, "Interpolation type");
+    int size = 1024;
+    table = FloatArray::create(size + 3);
+    for(unsigned int n = 0; n < size; ++n){
+      table[n] = sin(2 * M_PI * n / size);
     }
-    osc.setTable(table);
-    lfo.setTable(table);
-    fm.setTable(table);
+    for(unsigned int n = 0; n < 3; ++n){
+      table[n + size] = table[n];
+    }
+    oscNo.setTable(FloatArray(table.getData() + 1, size));
+    oscLin.setTable(FloatArray(table.getData() + 1, size + 1));
+    FloatArray table4 = FloatArray(table.getData(), size + 3);
+    osc4.setTable(table4);
+    lfo.setTable(table4);
+    lfo.setTimeBase(getBlockSize());
+    fm.setTable(table4);
+	fc = FloatArray::create(getBlockSize());
   }
 
   ~WavetableOscillatorTestPatch(){
@@ -34,9 +45,9 @@ public:
   void processAudio(AudioBuffer &buffer){
     float frequency = getParameterValue(PARAMETER_A) * 500 + 100;
     float parameterB = getParameterValue(PARAMETER_B);
-    float fmFreq = getParameterValue(PARAMETER_C) * 1000;
-    float fmWidth = getParameterValue(PARAMETER_D) * 1;
-
+    float parameterC = getParameterValue(PARAMETER_C);
+    float parameterD = getParameterValue(PARAMETER_D);
+    float fmWidth = 0.1;
     FloatArray fa=buffer.getSamples(0);
     FloatArray fb=buffer.getSamples(1);
     float lfoValue;
@@ -48,18 +59,33 @@ public:
       lfoValue = lfo.getNextSample();
     }
     // smooth the LFO value
-    for(int n = 0; n < fb.getSize(); ++n){
+    for(int n = 0; n < fc.getSize(); ++n){
       static float oldLfoValue = 0;
-      fb[n] = oldLfoValue * 0.99 + lfoValue * 0.01;
-      oldLfoValue = fb[n];
+      fc[n] = oldLfoValue * 0.99 + lfoValue * 0.01;
+      oldLfoValue = fc[n];
     }
-    fm.setFrequency(fmFreq);
-    fm.getSamples(fa);
-    fa.multiply(fmWidth);
-    osc.setFrequency(frequency);
-    osc.getSamples(fa, fa); // the carrier oscillator is modulated
-    fa.multiply(fb);
-    buffer.getSamples(1).copyFrom(fa);
+ 
+    // make the width fm knob inactive when close to 0
+    if (parameterC < 0.05){
+      fa.setAll(0);
+    } else {
+      float fmFreq = (parameterC - 0.05) * 1000;
+      fm.setFrequency(fmFreq);
+      fm.getSamples(fa);
+      fa.multiply(fmWidth);
+    }
+    Oscillator* osc;
+    if(parameterD < 0.33){ // use no interpolation
+      osc = &oscNo;
+    } else if (parameterD < 0.66){ // use linear interpolation
+      osc = &oscLin;
+    } else {
+      osc = &osc4;
+    }
+    fb.copyFrom(fa); // output the modulator to the right channel
+    osc->setFrequency(frequency);
+    osc->getSamples(fa, fa);// the carrier oscillator is FM'd
+    fa.multiply(fc); // the carrier oscillator is AM'd  and output to the left channel
   }
 };
 
