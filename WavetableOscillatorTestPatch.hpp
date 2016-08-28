@@ -43,7 +43,7 @@ public:
   }
 
   void processAudio(AudioBuffer &buffer){
-    float frequency = getParameterValue(PARAMETER_A) * 500 + 100;
+    float frequency = getParameterValue(PARAMETER_A) * 570 + 30;
     float parameterB = getParameterValue(PARAMETER_B);
     float parameterC = getParameterValue(PARAMETER_C);
     float parameterD = getParameterValue(PARAMETER_D);
@@ -74,14 +74,22 @@ public:
       fm.getSamples(fa);
       fa.multiply(fmWidth);
     }
-    Oscillator* osc;
+    static WavetableOscillator* osc = &oscNo;
+	static float oldParameterD = parameterD;
     if(parameterD < 0.33){ // use no interpolation
+	  if(oldParameterD >= 0.33)
+        oscNo.setPhase(osc->getPhase());
       osc = &oscNo;
     } else if (parameterD < 0.66){ // use linear interpolation
+	  if(oldParameterD >= 0.66 || oldParameterD < 0.33)
+        oscLin.setPhase(osc->getPhase());
       osc = &oscLin;
     } else {
+	  if(oldParameterD < 0.66)
+        osc4.setPhase(osc->getPhase());
       osc = &osc4;
     }
+    oldParameterD = parameterD;
     fb.copyFrom(fa); // output the modulator to the right channel
     osc->setFrequency(frequency);
     osc->getSamples(fa, fa);// the carrier oscillator is FM'd
